@@ -102,11 +102,6 @@ type RKE2ServerConfig struct {
 	//+optional
 	CNI CNI `json:"cni,omitempty"`
 
-	// CNIMultusEnable enables multus as the first CNI plugin (default: false).
-	// This option will automatically make Multus a primary CNI, and the value, if specified in the CNI field, as a secondary CNI plugin.
-	//+optional
-	CNIMultusEnable bool `json:"cniMultusEnable,omitempty"`
-
 	// PauseImage Override image to use for pause.
 	//+optional
 	PauseImage string `json:"pauseImage,omitempty"`
@@ -298,14 +293,15 @@ const (
 // DisableComponents describes components of RKE2 (Kubernetes components and plugin components) that should be disabled.
 type DisableComponents struct {
 	// KubernetesComponents is a list of Kubernetes components to disable.
+	// +kubebuilder:validation:Enum=scheduler;kubeProxy;cloudController
 	KubernetesComponents []DisabledKubernetesComponent `json:"kubernetesComponents,omitempty"`
 
 	// PluginComponents is a list of PluginComponents to disable.
+	// +kubebuilder:validation:Enum=rke2-coredns;rke2-ingress-nginx;rke2-metrics-server
 	PluginComponents []DisabledPluginComponent `json:"pluginComponents,omitempty"`
 }
 
 // DisabledKubernetesComponent is an enum field that can take one of the following values: scheduler, kubeProxy or cloudController.
-// +kubebuilder:validation:Enum=scheduler;kubeProxy;cloudController
 type DisabledKubernetesComponent string
 
 const (
@@ -320,7 +316,6 @@ const (
 )
 
 // DisabledPluginComponent selects a plugin Components to be disabled.
-// +kubebuilder:validation:Enum=rke2-coredns;rke2-ingress-nginx;rke2-metrics-server
 type DisabledPluginComponent string
 
 const (

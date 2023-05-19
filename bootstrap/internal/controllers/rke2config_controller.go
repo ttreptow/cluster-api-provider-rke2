@@ -43,7 +43,6 @@ import (
 
 	bootstrapv1 "github.com/rancher-sandbox/cluster-api-provider-rke2/bootstrap/api/v1alpha1"
 	"github.com/rancher-sandbox/cluster-api-provider-rke2/bootstrap/internal/cloudinit"
-	"github.com/rancher-sandbox/cluster-api-provider-rke2/bootstrap/internal/ignition"
 	controlplanev1 "github.com/rancher-sandbox/cluster-api-provider-rke2/controlplane/api/v1alpha1"
 	"github.com/rancher-sandbox/cluster-api-provider-rke2/pkg/consts"
 	"github.com/rancher-sandbox/cluster-api-provider-rke2/pkg/locking"
@@ -414,23 +413,12 @@ func (r *RKE2ConfigReconciler) handleClusterNotInitialized(ctx context.Context, 
 		Certificates: certificates,
 	}
 
-	var userData []byte
-
-	switch scope.Config.Spec.AgentConfig.Format {
-	case bootstrapv1.Ignition:
-		userData, err = ignition.NewInitControlPlane(&ignition.ControlPlaneInput{
-			ControlPlaneInput:  cpinput,
-			AdditionalIgnition: &scope.Config.Spec.AgentConfig.AdditionalUserData,
-		})
-	default:
-		userData, err = cloudinit.NewInitControlPlane(cpinput)
-	}
-
+	cloudInitData, err := cloudinit.NewInitControlPlane(cpinput)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.storeBootstrapData(ctx, scope, userData); err != nil {
+	if err := r.storeBootstrapData(ctx, scope, cloudInitData); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -507,7 +495,7 @@ func (r *RKE2ConfigReconciler) joinControlplane(ctx context.Context, scope *Scop
 	scope.Logger.Info("RKE2 server token found in Secret!")
 
 	if len(scope.ControlPlane.Status.AvailableServerIPs) == 0 {
-		scope.Logger.Info("No ControlPlane IP Address found for node registration")
+		scope.Logger.V(3).Info("No ControlPlane IP Address found for node registration")
 
 		return ctrl.Result{RequeueAfter: DefaultRequeueAfter}, nil
 	}
@@ -589,27 +577,12 @@ func (r *RKE2ConfigReconciler) joinControlplane(ctx context.Context, scope *Scop
 		},
 	}
 
+	cloudInitData, err := cloudinit.NewJoinControlPlane(cpinput)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	var userData []byte
-
-	switch scope.Config.Spec.AgentConfig.Format {
-	case bootstrapv1.Ignition:
-		userData, err = ignition.NewJoinControlPlane(&ignition.ControlPlaneInput{
-			ControlPlaneInput:  cpinput,
-			AdditionalIgnition: &scope.Config.Spec.AgentConfig.AdditionalUserData,
-		})
-	default:
-		userData, err = cloudinit.NewJoinControlPlane(cpinput)
-	}
-
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if err := r.storeBootstrapData(ctx, scope, userData); err != nil {
+	if err := r.storeBootstrapData(ctx, scope, cloudInitData); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -637,7 +610,7 @@ func (r *RKE2ConfigReconciler) joinWorker(ctx context.Context, scope *Scope) (re
 	scope.Logger.Info("RKE2 server token found in Secret!")
 
 	if len(scope.ControlPlane.Status.AvailableServerIPs) == 0 {
-		scope.Logger.V(1).Info("No ControlPlane IP Address found for node registration")
+		scope.Logger.V(3).Info("No ControlPlane IP Address found for node registration")
 
 		return ctrl.Result{RequeueAfter: DefaultRequeueAfter}, nil
 	}
@@ -695,23 +668,12 @@ func (r *RKE2ConfigReconciler) joinWorker(ctx context.Context, scope *Scope) (re
 		AdditionalCloudInit: scope.Config.Spec.AgentConfig.AdditionalUserData.Config,
 	}
 
-	var userData []byte
-
-	switch scope.Config.Spec.AgentConfig.Format {
-	case bootstrapv1.Ignition:
-		userData, err = ignition.NewJoinWorker(&ignition.JoinWorkerInput{
-			BaseUserData:       wkInput,
-			AdditionalIgnition: &scope.Config.Spec.AgentConfig.AdditionalUserData,
-		})
-	default:
-		userData, err = cloudinit.NewJoinWorker(wkInput)
-	}
-
+	cloudInitData, err := cloudinit.NewJoinWorker(wkInput)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.storeBootstrapData(ctx, scope, userData); err != nil {
+	if err := r.storeBootstrapData(ctx, scope, cloudInitData); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -732,7 +694,7 @@ func (r *RKE2ConfigReconciler) generateAndStoreToken(ctx context.Context, scope 
 			Name:      bsutil.TokenName(scope.Cluster.Name),
 			Namespace: scope.Config.Namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: scope.Cluster.Name,
+				clusterv1.ClusterNameLabel: scope.Cluster.Name,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
@@ -765,7 +727,7 @@ func (r *RKE2ConfigReconciler) storeBootstrapData(ctx context.Context, scope *Sc
 			Name:      scope.Config.Name,
 			Namespace: scope.Config.Namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: scope.Cluster.Name,
+				clusterv1.ClusterNameLabel: scope.Cluster.Name,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
@@ -778,8 +740,7 @@ func (r *RKE2ConfigReconciler) storeBootstrapData(ctx context.Context, scope *Sc
 			},
 		},
 		Data: map[string][]byte{
-			"value":  data,
-			"format": []byte(scope.Config.Spec.AgentConfig.Format),
+			"value": data,
 		},
 		Type: clusterv1.ClusterSecretType,
 	}

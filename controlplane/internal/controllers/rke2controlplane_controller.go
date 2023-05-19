@@ -256,7 +256,7 @@ func (r *RKE2ControlPlaneReconciler) updateStatus(ctx context.Context, rcp *cont
 
 	readyMachines := ownedMachines.Filter(collections.IsReady())
 	for _, readyMachine := range readyMachines {
-		logger.V(3).Info("Ready Machine : " + readyMachine.Name)
+		logger.Info("Ready Machine :", "machine-name", readyMachine.Name)
 	}
 
 	controlPlane, err := rke2.NewControlPlane(ctx, r.Client, cluster, rcp, ownedMachines)
@@ -339,19 +339,14 @@ func (r *RKE2ControlPlaneReconciler) updateStatus(ctx context.Context, rcp *cont
 	}
 
 	if len(ownedMachines) == 0 {
-		logger.Info(fmt.Sprintf("no Control Plane Machines exist for RKE2ControlPlane %s/%s", rcp.Namespace, rcp.Name))
-
-		return nil
+		return fmt.Errorf("no Control Plane Machines exist for RKE2ControlPlane %s/%s", rcp.Namespace, rcp.Name)
 	}
 
 	if len(readyMachines) == 0 {
-		logger.Info(fmt.Sprintf("no Control Plane Machines are ready for RKE2ControlPlane %s/%s", rcp.Namespace, rcp.Name))
-
-		return nil
+		return fmt.Errorf("no Control Plane Machines are ready for RKE2ControlPlane %s/%s", rcp.Namespace, rcp.Name)
 	}
 
-	availableCPMachines := readyMachines
-
+	availableCPMachines := readyMachines.Filter(collections.Not(collections.HasUnhealthyCondition))
 	validIPAddresses := []string{}
 
 	for _, machine := range availableCPMachines {
@@ -360,7 +355,9 @@ func (r *RKE2ControlPlaneReconciler) updateStatus(ctx context.Context, rcp *cont
 			break
 		}
 
-		validIPAddresses = append(validIPAddresses, ipAddress)
+		if !conditions.IsFalse(machine, clusterv1.MachineNodeHealthyCondition) {
+			validIPAddresses = append(validIPAddresses, ipAddress)
+		}
 	}
 
 	rcp.Status.AvailableServerIPs = validIPAddresses
@@ -652,23 +649,8 @@ func (r *RKE2ControlPlaneReconciler) reconcileKubeconfig(
 func (r *RKE2ControlPlaneReconciler) reconcileControlPlaneConditions(ctx context.Context, controlPlane *rke2.ControlPlane) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	readyCPMachines := controlPlane.Machines.Filter(collections.IsReady())
-
-	if readyCPMachines.Len() == 0 {
+	if controlPlane.Machines.Len() == 0 {
 		controlPlane.RCP.Status.Initialized = false
-		controlPlane.RCP.Status.Ready = false
-		controlPlane.RCP.Status.ReadyReplicas = 0
-		controlPlane.RCP.Status.AvailableServerIPs = nil
-		conditions.MarkFalse(
-			controlPlane.RCP,
-			controlplanev1.AvailableCondition,
-			controlplanev1.WaitingForRKE2ServerReason,
-			clusterv1.ConditionSeverityInfo, "")
-		conditions.MarkFalse(
-			controlPlane.RCP,
-			controlplanev1.MachinesReadyCondition,
-			controlplanev1.WaitingForRKE2ServerReason,
-			clusterv1.ConditionSeverityInfo, "")
 	}
 
 	// If the cluster is not yet initialized, there is no way to connect to the workload cluster and fetch information

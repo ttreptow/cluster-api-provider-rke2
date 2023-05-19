@@ -21,8 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 func TestUtil(t *testing.T) {
@@ -30,5 +28,5 @@ func TestUtil(t *testing.T) {
 
 	RunSpecsWithDefaultAndCustomReporters(t,
 		"Util Suite",
-		[]Reporter{printer.NewlineReporter{}})
+		[]Reporter{})
 }

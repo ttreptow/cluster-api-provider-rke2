@@ -220,6 +220,7 @@ func (c *ControlPlane) GenerateRKE2Config(spec *bootstrapv1.RKE2ConfigSpec) *boo
 func ControlPlaneLabelsForCluster(clusterName string) map[string]string {
 	return map[string]string{
 		clusterv1.ClusterNameLabel:             clusterName,
+		clusterv1.MachineControlPlaneLabel:     "",
 		clusterv1.MachineControlPlaneNameLabel: "",
 	}
 }

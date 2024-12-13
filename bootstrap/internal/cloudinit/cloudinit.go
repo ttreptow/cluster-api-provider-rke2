@@ -141,6 +141,9 @@ func generate(kind string, tpl string, data interface{}) ([]byte, error) {
 	if err := t.Execute(out, data); err != nil {
 		return nil, errors.Wrapf(err, "failed to generate %s template", kind)
 	}
+	if err := out.Close(); err != nil {
+		return nil, errors.Wrapf(err, "failed to generate %s compressed userdata", kind)
+	}
 	return buf.Bytes(), nil
 }
 
